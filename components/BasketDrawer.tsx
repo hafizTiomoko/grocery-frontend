@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useBasket } from "@/store/useBasket";
+import { CheckoutModal } from "./CheckoutModal";
 import type { BasketBreakdown, Retailer } from "@/lib/api";
 
 const RETAILER_NAMES: Record<Retailer, string> = {
@@ -42,6 +43,7 @@ export function BasketDrawer() {
   const loading = useBasket((s) => s.loadingComparison);
   const clear = useBasket((s) => s.clear);
   const [expanded, setExpanded] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   const message = useMemo(
     () => optimizerMessage(items, comparison?.breakdown, comparison?.cheapest_retailer),
@@ -129,13 +131,7 @@ export function BasketDrawer() {
             </Link>
             <button
               disabled={items.length === 0}
-              onClick={() =>
-                console.log("Checkout for Delivery", {
-                  items,
-                  cheapest: comparison?.cheapest_retailer,
-                  total: comparison?.cheapest_total,
-                })
-              }
+              onClick={() => setCheckoutOpen(true)}
               className="flex-1 rounded-full bg-emerald-500 py-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
             >
               Checkout for Delivery
@@ -156,6 +152,8 @@ export function BasketDrawer() {
           </div>
         )}
       </div>
+
+      {checkoutOpen && <CheckoutModal onClose={() => setCheckoutOpen(false)} />}
     </div>
   );
 }

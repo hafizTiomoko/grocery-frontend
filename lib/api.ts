@@ -66,3 +66,31 @@ export function searchProducts(query: string, opts?: { limit?: number; live?: bo
 export function optimizeBasket(ids: number[]) {
   return getJson<BasketOptimizeResponse>("/basket/optimize", { ids });
 }
+
+export interface OrderPayload {
+  items: { id: number; name: string; price: number }[];
+  retailer: Retailer;
+  total: number;
+  address: string;
+  delivery_time: string;
+  phone: string;
+}
+
+export interface OrderResponse {
+  order_id: string;
+  status: string;
+}
+
+export async function submitOrder(payload: OrderPayload): Promise<OrderResponse> {
+  const url = new URL("/order", API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`API ${res.status}: ${text || res.statusText}`);
+  }
+  return res.json() as Promise<OrderResponse>;
+}

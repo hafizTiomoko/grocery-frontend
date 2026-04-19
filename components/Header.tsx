@@ -1,4 +1,5 @@
 "use client";
+import { AuthButton } from "./AuthButton";
 
 export function Header({
   value,
@@ -62,6 +63,7 @@ export function Header({
             </div>
           </div>
         </div>
+        <AuthButton />
       </div>
     </header>
   );

@@ -28,8 +28,18 @@ export function CheckoutModal({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
 
-  const winner = comparison?.cheapest_retailer ?? null;
-  const total = comparison?.cheapest_total ?? 0;
+  // Sum all basket items for the real total, regardless of retailer
+  const total = items.reduce((sum, p) => sum + p.effective_price, 0);
+  const totalRounded = Math.round(total * 100) / 100;
+
+  // Determine dominant retailer (most items), fall back to comparison winner
+  const retailerCounts = items.reduce<Partial<Record<Retailer, number>>>((acc, p) => {
+    acc[p.retailer] = (acc[p.retailer] ?? 0) + 1;
+    return acc;
+  }, {});
+  const dominantRetailer = (Object.entries(retailerCounts).sort((a, b) => b[1] - a[1])[0]?.[0] as Retailer) ?? null;
+  const winner = comparison?.cheapest_retailer ?? dominantRetailer;
+  const multipleRetailers = Object.keys(retailerCounts).length > 1;
 
   const valid = address.trim().length > 5 && deliveryTime && phone.trim().length >= 10;
 
@@ -40,9 +50,9 @@ export function CheckoutModal({ onClose }: { onClose: () => void }) {
     setSubmitting(true);
     try {
       await submitOrder({
-        items: items.map((p) => ({ id: p.id, name: p.name, price: p.effective_price })),
+        items: items.map((p) => ({ id: p.id, name: p.name, price: p.effective_price, retailer: p.retailer })),
         retailer: winner,
-        total,
+        total: totalRounded,
         address: address.trim(),
         delivery_time: deliveryTime,
         phone: phone.trim(),
@@ -78,11 +88,16 @@ export function CheckoutModal({ onClose }: { onClose: () => void }) {
         {winner && (
           <div className="mx-5 mt-4 rounded-2xl bg-emerald-500 p-4 text-white">
             <p className="text-xs font-medium uppercase tracking-wide text-emerald-100">
-              Delivering from
+              {multipleRetailers ? "Best option" : "Delivering from"}
             </p>
             <p className="mt-1 text-xl font-bold">{RETAILER_LABEL[winner]}</p>
+            {multipleRetailers && (
+              <p className="mt-0.5 text-xs text-emerald-100">
+                Items from {Object.keys(retailerCounts).length} retailers in your basket
+              </p>
+            )}
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-bold tracking-tight">£{total.toFixed(2)}</span>
+              <span className="text-2xl font-bold tracking-tight">£{totalRounded.toFixed(2)}</span>
               <span className="text-sm text-emerald-100">{items.length} item{items.length !== 1 ? "s" : ""}</span>
             </div>
           </div>
@@ -139,7 +154,7 @@ export function CheckoutModal({ onClose }: { onClose: () => void }) {
             disabled={!valid || submitting || !winner}
             className="mt-2 w-full rounded-full bg-emerald-500 py-3.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
           >
-            {submitting ? "Placing order…" : `Confirm — £${total.toFixed(2)}`}
+            {submitting ? "Placing order…" : `Confirm — £${totalRounded.toFixed(2)}`}
           </button>
         </form>
       </div>

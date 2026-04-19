@@ -37,7 +37,7 @@ export interface BasketOptimizeResponse {
 }
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_BASE ?? "https://grocery-backend-i6yt.onrender.com";
 
 async function getJson<T>(path: string, params?: Record<string, string | number | boolean | (string | number)[]>): Promise<T> {
   const url = new URL(path, API_BASE);

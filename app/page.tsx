@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/ProductCardSkeleton";
 import { BasketDrawer } from "@/components/BasketDrawer";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { RefreshButton } from "@/components/RefreshButton";
 import { LiveScrapeBanner } from "@/components/LiveScrapeBanner";
 import { Toast, type ToastTone } from "@/components/Toast";
@@ -22,6 +23,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [noCacheHint, setNoCacheHint] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
   const requestIdRef = useRef(0);
@@ -90,7 +92,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen pb-64">
-      <Header value={query} onChange={setQuery} loading={loading} />
+      <Header value={query} onChange={setQuery} loading={loading} onScanClick={() => setScannerOpen(true)} />
 
       <main className="mx-auto max-w-2xl px-4 py-4">
         {showEmptyState && (
@@ -171,6 +173,10 @@ export default function HomePage() {
       </main>
 
       <BasketDrawer />
+
+      {scannerOpen && (
+        <BarcodeScanner onClose={() => setScannerOpen(false)} />
+      )}
 
       {toast && (
         <Toast message={toast.message} tone={toast.tone} onDismiss={() => setToast(null)} />

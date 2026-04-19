@@ -1,4 +1,4 @@
-const CACHE_NAME = "onebasquet-v2";
+const CACHE_NAME = "onebasqet-v3";
 const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

@@ -1,6 +1,6 @@
 {
-  "name": "OneBasquet",
-  "short_name": "Basquet",
+  "name": "OneBasqet",
+  "short_name": "Basqet",
   "description": "Compare grocery baskets across UK retailers",
   "start_url": "/",
   "display": "standalone",

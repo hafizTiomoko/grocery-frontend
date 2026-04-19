@@ -3,13 +3,13 @@ import type { Metadata, Viewport } from "next";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
-  title: "OneBasquet",
+  title: "OneBasqet",
   description: "Compare grocery baskets across UK retailers",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "OneBasquet",
+    title: "OneBasqet",
   },
 };
 

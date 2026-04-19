@@ -17,7 +17,7 @@ export function Header({
       <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-emerald-500" />
-          <span className="text-lg font-semibold tracking-tight">OneBasquet</span>
+          <span className="text-lg font-semibold tracking-tight">OneBasqet</span>
         </div>
         <div className="ml-auto flex flex-1 items-center">
           <div className="relative w-full">

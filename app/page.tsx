@@ -21,6 +21,7 @@ export default function HomePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [noCacheHint, setNoCacheHint] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
   const requestIdRef = useRef(0);
@@ -33,6 +34,7 @@ export default function HomePage() {
       setError(null);
       setLoading(false);
       setHasSearched(false);
+      setNoCacheHint(false);
       return;
     }
 
@@ -45,6 +47,7 @@ export default function HomePage() {
         if (reqId !== requestIdRef.current) return;
         setResults(res.results);
         setHasSearched(true);
+        setNoCacheHint(res.hint === "no_cache");
       })
       .catch((e: unknown) => {
         if (reqId !== requestIdRef.current) return;
@@ -137,7 +140,22 @@ export default function HomePage() {
           <div className="py-10 text-center">
             <div className="text-3xl">🔎</div>
             <p className="mt-2 text-sm font-medium text-slate-700">No products found</p>
-            <p className="text-xs text-slate-500">Try a different search term.</p>
+            {noCacheHint ? (
+              <div className="mt-3">
+                <p className="text-xs text-slate-500">
+                  This item isn't in our cache yet.
+                </p>
+                <button
+                  onClick={refreshLive}
+                  disabled={refreshing}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  Fetch live prices
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Try a different search term.</p>
+            )}
           </div>
         )}
 

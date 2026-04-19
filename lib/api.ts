@@ -19,6 +19,7 @@ export interface SearchResponse {
   query: string;
   count: number;
   results: Product[];
+  hint?: "no_cache" | null;
 }
 
 export interface BasketBreakdown {

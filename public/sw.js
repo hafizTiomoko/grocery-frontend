@@ -1,4 +1,4 @@
-const CACHE_NAME = "onebasquet-v1";
+const CACHE_NAME = "onebasquet-v2";
 const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -20,9 +20,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
-  // API calls: network-first, no cache fallback.
-  if (request.url.includes("/search") || request.url.includes("/basket/")) {
-    event.respondWith(fetch(request));
+  // Never intercept cross-origin requests (API calls) — let the browser
+  // handle CORS natively. The SW proxying strips CORS headers.
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) {
     return;
   }
 

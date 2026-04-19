@@ -67,6 +67,7 @@ export const useBasket = create<BasketState>((set, get) => ({
   },
 
   syncToCloud: async () => {
+    if (!supabase) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
 
@@ -87,6 +88,7 @@ export const useBasket = create<BasketState>((set, get) => ({
   },
 
   loadFromCloud: async () => {
+    if (!supabase) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
 

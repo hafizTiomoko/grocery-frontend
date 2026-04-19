@@ -138,6 +138,10 @@ export function AuthButton() {
     });
   }, [initialize, loadFromCloud]);
 
+  const available = useAuth((s) => s.available);
+
+  if (!available) return null;
+
   if (loading) {
     return (
       <div className="h-8 w-8 animate-pulse rounded-full bg-slate-100" />

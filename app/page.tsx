@@ -1,14 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Header } from "@/components/Header";
-import { ProductCard } from "@/components/ProductCard";
+import { ComparisonGroupCard } from "@/components/ComparisonGroupCard";
 import { ProductCardSkeleton } from "@/components/ProductCardSkeleton";
 import { BasketDrawer } from "@/components/BasketDrawer";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { RefreshButton } from "@/components/RefreshButton";
 import { LiveScrapeBanner } from "@/components/LiveScrapeBanner";
 import { Toast, type ToastTone } from "@/components/Toast";
-import { searchProducts, type Product } from "@/lib/api";
+import { searchGrouped, searchProducts, type ComparisonGroup } from "@/lib/api";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 type ToastState = { message: string; tone: ToastTone } | null;
@@ -17,7 +17,7 @@ export default function HomePage() {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 500);
 
-  const [results, setResults] = useState<Product[]>([]);
+  const [groups, setGroups] = useState<ComparisonGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export default function HomePage() {
     const trimmed = debouncedQuery.trim();
 
     if (!trimmed) {
-      setResults([]);
+      setGroups([]);
       setError(null);
       setLoading(false);
       setHasSearched(false);
@@ -44,17 +44,17 @@ export default function HomePage() {
     setLoading(true);
     setError(null);
 
-    searchProducts(trimmed, { limit: 30 })
+    searchGrouped(trimmed, { limit: 30 })
       .then((res) => {
         if (reqId !== requestIdRef.current) return;
-        setResults(res.results);
+        setGroups(res.groups);
         setHasSearched(true);
-        setNoCacheHint(res.hint === "no_cache");
+        setNoCacheHint(res.group_count === 0);
       })
       .catch((e: unknown) => {
         if (reqId !== requestIdRef.current) return;
         setError(e instanceof Error ? e.message : "Search failed");
-        setResults([]);
+        setGroups([]);
         setHasSearched(true);
       })
       .finally(() => {
@@ -72,9 +72,11 @@ export default function HomePage() {
     setError(null);
 
     try {
-      const res = await searchProducts(trimmed, { limit: 30, live: true });
+      // Live scrape via the original endpoint, then re-fetch grouped
+      await searchProducts(trimmed, { limit: 30, live: true });
+      const res = await searchGrouped(trimmed, { limit: 30 });
       if (reqId !== requestIdRef.current) return;
-      setResults(res.results);
+      setGroups(res.groups);
       setHasSearched(true);
       setToast({ message: "Prices updated successfully", tone: "success" });
     } catch (e) {
@@ -88,7 +90,7 @@ export default function HomePage() {
 
   const showEmptyState = !query.trim() && !loading && !refreshing;
   const showNoResults =
-    hasSearched && !loading && !refreshing && !error && results.length === 0 && !!query.trim();
+    hasSearched && !loading && !refreshing && !error && groups.length === 0 && !!query.trim();
 
   return (
     <div className="min-h-screen pb-64">
@@ -109,6 +111,9 @@ export default function HomePage() {
           <div className="mb-3 flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
               {query ? `Results for "${query}"` : "Results"}
+              {!loading && groups.length > 0 && (
+                <span className="ml-1 text-slate-400">· {groups.length} group{groups.length !== 1 ? "s" : ""}</span>
+              )}
             </p>
             <RefreshButton
               onClick={refreshLive}
@@ -130,7 +135,7 @@ export default function HomePage() {
 
         {loading && !refreshing && (
           <ul className="mt-2 space-y-3" aria-busy="true" aria-label="Loading results">
-            {Array.from({ length: 4 }).map((_, i) => (
+            {Array.from({ length: 3 }).map((_, i) => (
               <li key={i}>
                 <ProductCardSkeleton />
               </li>
@@ -161,11 +166,11 @@ export default function HomePage() {
           </div>
         )}
 
-        {!loading && results.length > 0 && (
-          <ul className="mt-2 space-y-3">
-            {results.map((p) => (
-              <li key={`${p.retailer}-${p.id}`}>
-                <ProductCard product={p} />
+        {!loading && groups.length > 0 && (
+          <ul className="mt-2 space-y-4">
+            {groups.map((g, i) => (
+              <li key={`${g.display_name}-${i}`}>
+                <ComparisonGroupCard group={g} />
               </li>
             ))}
           </ul>

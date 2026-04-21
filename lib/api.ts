@@ -64,6 +64,28 @@ export function searchProducts(query: string, opts?: { limit?: number; live?: bo
   });
 }
 
+export interface ComparisonGroup {
+  display_name: string;
+  options: Partial<Record<Retailer, Product>>;
+  cheapest_retailer: Retailer;
+  cheapest_price: number;
+  retailer_count: number;
+}
+
+export interface GroupedSearchResponse {
+  query: string;
+  group_count: number;
+  groups: ComparisonGroup[];
+}
+
+export function searchGrouped(query: string, opts?: { limit?: number; threshold?: number }) {
+  return getJson<GroupedSearchResponse>("/search/grouped", {
+    query,
+    limit: opts?.limit ?? 30,
+    threshold: opts?.threshold ?? 75,
+  });
+}
+
 export function optimizeBasket(ids: number[]) {
   return getJson<BasketOptimizeResponse>("/basket/optimize", { ids });
 }

@@ -28,13 +28,14 @@ export function CheckoutModal({ onClose }: { onClose: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
 
-  // Sum all basket items for the real total, regardless of retailer
-  const total = items.reduce((sum, p) => sum + p.effective_price, 0);
+  // Sum all basket items * quantity for the real total
+  const total = items.reduce((sum, p) => sum + p.effective_price * (p.quantity ?? 1), 0);
   const totalRounded = Math.round(total * 100) / 100;
+  const totalQty = items.reduce((s, p) => s + (p.quantity ?? 1), 0);
 
   // Determine dominant retailer (most items), fall back to comparison winner
   const retailerCounts = items.reduce<Partial<Record<Retailer, number>>>((acc, p) => {
-    acc[p.retailer] = (acc[p.retailer] ?? 0) + 1;
+    acc[p.retailer] = (acc[p.retailer] ?? 0) + (p.quantity ?? 1);
     return acc;
   }, {});
   const dominantRetailer = (Object.entries(retailerCounts).sort((a, b) => b[1] - a[1])[0]?.[0] as Retailer) ?? null;
@@ -50,7 +51,7 @@ export function CheckoutModal({ onClose }: { onClose: () => void }) {
     setSubmitting(true);
     try {
       await submitOrder({
-        items: items.map((p) => ({ id: p.id, name: p.name, price: p.effective_price, retailer: p.retailer })),
+        items: items.map((p) => ({ id: p.id, name: p.name, price: p.effective_price, retailer: p.retailer, quantity: p.quantity ?? 1 })),
         retailer: winner,
         total: totalRounded,
         address: address.trim(),
@@ -98,7 +99,7 @@ export function CheckoutModal({ onClose }: { onClose: () => void }) {
             )}
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-2xl font-bold tracking-tight">£{totalRounded.toFixed(2)}</span>
-              <span className="text-sm text-emerald-100">{items.length} item{items.length !== 1 ? "s" : ""}</span>
+              <span className="text-sm text-emerald-100">{totalQty} item{totalQty !== 1 ? "s" : ""}</span>
             </div>
           </div>
         )}

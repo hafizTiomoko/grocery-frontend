@@ -13,6 +13,7 @@ export interface Product {
   gtin?: string | null;
   timestamp?: string | null;
   updated_ago?: string | null;
+  quantity?: number;
 }
 
 export interface SearchResponse {

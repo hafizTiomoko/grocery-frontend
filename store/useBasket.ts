@@ -2,8 +2,12 @@ import { create } from "zustand";
 import { optimizeBasket, type BasketOptimizeResponse, type Product } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
+export interface BasketItem extends Product {
+  quantity: number;
+}
+
 interface BasketState {
-  items: Product[];
+  items: BasketItem[];
   comparison: BasketOptimizeResponse | null;
   loadingComparison: boolean;
   error: string | null;
@@ -11,11 +15,12 @@ interface BasketState {
 
   add: (product: Product) => void;
   remove: (id: number) => void;
+  setQuantity: (id: number, quantity: number) => void;
   clear: () => void;
   refreshComparison: () => Promise<void>;
   syncToCloud: () => Promise<void>;
   loadFromCloud: () => Promise<void>;
-  setItems: (items: Product[]) => void;
+  setItems: (items: BasketItem[]) => void;
 }
 
 export const useBasket = create<BasketState>((set, get) => ({
@@ -31,8 +36,17 @@ export const useBasket = create<BasketState>((set, get) => ({
   },
 
   add: (product) => {
-    if (get().items.some((p) => p.id === product.id)) return;
-    set({ items: [...get().items, product] });
+    const existing = get().items.find((p) => p.id === product.id);
+    if (existing) {
+      // Increment quantity if already in basket
+      set({
+        items: get().items.map((p) =>
+          p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p
+        ),
+      });
+    } else {
+      set({ items: [...get().items, { ...product, quantity: 1 }] });
+    }
     void get().refreshComparison();
     void get().syncToCloud();
   },
@@ -43,13 +57,29 @@ export const useBasket = create<BasketState>((set, get) => ({
     void get().syncToCloud();
   },
 
+  setQuantity: (id, quantity) => {
+    if (quantity <= 0) {
+      get().remove(id);
+      return;
+    }
+    set({
+      items: get().items.map((p) =>
+        p.id === id ? { ...p, quantity } : p
+      ),
+    });
+    void get().refreshComparison();
+    void get().syncToCloud();
+  },
+
   clear: () => {
     set({ items: [], comparison: null });
     void get().syncToCloud();
   },
 
   refreshComparison: async () => {
-    const ids = get().items.map((p) => p.id);
+    const items = get().items;
+    // Send each ID repeated by its quantity so the backend totals correctly
+    const ids = items.flatMap((p) => Array(p.quantity).fill(p.id));
     if (ids.length === 0) {
       set({ comparison: null, error: null });
       return;
@@ -100,9 +130,10 @@ export const useBasket = create<BasketState>((set, get) => ({
         .single();
 
       if (data?.basket_json) {
-        const items: Product[] = JSON.parse(data.basket_json);
+        const items: BasketItem[] = JSON.parse(data.basket_json);
         if (items.length > 0) {
-          set({ items });
+          // Ensure quantity exists for legacy data
+          set({ items: items.map((p) => ({ ...p, quantity: p.quantity || 1 })) });
           void get().refreshComparison();
         }
       }

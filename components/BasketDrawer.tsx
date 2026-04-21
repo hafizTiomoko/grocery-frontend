@@ -106,7 +106,7 @@ export function BasketDrawer() {
           {drawer === "collapsed" && items.length > 0 && (
             <div className="mt-2 flex items-center gap-2">
               <span className="text-xs font-medium text-slate-600">
-                Basket · {items.length} item{items.length !== 1 ? "s" : ""}
+                Basket · {items.reduce((s, p) => s + (p.quantity ?? 1), 0)} item{items.reduce((s, p) => s + (p.quantity ?? 1), 0) !== 1 ? "s" : ""}
               </span>
               {cheapest && (
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
@@ -196,12 +196,19 @@ export function BasketDrawer() {
         {drawer === "expanded" && items.length > 0 && (
           <div className="max-h-64 overflow-y-auto border-t border-slate-100 px-5 py-3">
             <ul className="space-y-2">
-              {items.map((p) => (
-                <li key={p.id} className="flex items-center justify-between text-sm">
-                  <span className="truncate pr-3 text-slate-700">{p.name}</span>
-                  <span className="font-medium">£{p.effective_price.toFixed(2)}</span>
-                </li>
-              ))}
+              {items.map((p) => {
+                const qty = p.quantity ?? 1;
+                const lineTotal = p.effective_price * qty;
+                return (
+                  <li key={p.id} className="flex items-center justify-between text-sm">
+                    <span className="truncate pr-3 text-slate-700">
+                      {p.name}
+                      {qty > 1 && <span className="ml-1 text-xs text-slate-400">x{qty}</span>}
+                    </span>
+                    <span className="font-medium">£{lineTotal.toFixed(2)}</span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

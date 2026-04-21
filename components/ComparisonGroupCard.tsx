@@ -17,6 +17,35 @@ function loyaltyIcon(retailer: Retailer) {
   return "💚";
 }
 
+function QuantityControl({ productId }: { productId: number }) {
+  const item = useBasket((s) => s.items.find((p) => p.id === productId));
+  const setQuantity = useBasket((s) => s.setQuantity);
+
+  if (!item) return null;
+
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <button
+        onClick={() => setQuantity(productId, item.quantity - 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600 transition hover:bg-slate-200"
+        aria-label="Decrease quantity"
+      >
+        −
+      </button>
+      <span className="w-6 text-center text-sm font-semibold text-slate-900">
+        {item.quantity}
+      </span>
+      <button
+        onClick={() => setQuantity(productId, item.quantity + 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700 transition hover:bg-emerald-200"
+        aria-label="Increase quantity"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 function RetailerTile({
   product,
   retailer,
@@ -30,7 +59,6 @@ function RetailerTile({
     product ? s.items.some((p) => p.id === product.id) : false
   );
   const add = useBasket((s) => s.add);
-  const remove = useBasket((s) => s.remove);
 
   if (!product) {
     return (
@@ -83,18 +111,22 @@ function RetailerTile({
         <span className="mt-0.5 text-[10px] text-slate-400">{product.unit_price}</span>
       )}
 
-      <button
-        onClick={() => (inBasket ? remove(product.id) : add(product))}
-        className={`mt-2 w-full rounded-full py-1.5 text-xs font-semibold transition ${
-          inBasket
-            ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            : isCheapest
-            ? "bg-emerald-500 text-white hover:bg-emerald-600"
-            : "bg-slate-900 text-white hover:bg-slate-800"
-        }`}
-      >
-        {inBasket ? "Remove" : "Add"}
-      </button>
+      {inBasket ? (
+        <div className="mt-2 w-full">
+          <QuantityControl productId={product.id} />
+        </div>
+      ) : (
+        <button
+          onClick={() => add(product)}
+          className={`mt-2 w-full rounded-full py-1.5 text-xs font-semibold transition ${
+            isCheapest
+              ? "bg-emerald-500 text-white hover:bg-emerald-600"
+              : "bg-slate-900 text-white hover:bg-slate-800"
+          }`}
+        >
+          Add
+        </button>
+      )}
     </div>
   );
 }

@@ -78,15 +78,14 @@ export const useBasket = create<BasketState>((set, get) => ({
 
   refreshComparison: async () => {
     const items = get().items;
-    // Send each ID repeated by its quantity so the backend totals correctly
-    const ids = items.flatMap((p) => Array(p.quantity).fill(p.id));
-    if (ids.length === 0) {
+    if (items.length === 0) {
       set({ comparison: null, error: null });
       return;
     }
     set({ loadingComparison: true, error: null });
     try {
-      const comparison = await optimizeBasket(ids);
+      const payload = items.map((p) => ({ id: p.id, quantity: p.quantity }));
+      const comparison = await optimizeBasket(payload);
       set({ comparison, loadingComparison: false });
     } catch (e) {
       set({

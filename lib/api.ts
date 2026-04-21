@@ -28,7 +28,11 @@ export interface BasketBreakdown {
   total: number;
   member_savings: number;
   item_count: number;
+  total_quantity: number;
   items: Product[];
+  free_delivery_threshold: number;
+  meets_free_delivery: boolean;
+  amount_to_free_delivery: number;
 }
 
 export interface BasketOptimizeResponse {
@@ -87,8 +91,19 @@ export function searchGrouped(query: string, opts?: { limit?: number; threshold?
   });
 }
 
-export function optimizeBasket(ids: number[]) {
-  return getJson<BasketOptimizeResponse>("/basket/optimize", { ids });
+export async function optimizeBasket(items: { id: number; quantity: number }[]): Promise<BasketOptimizeResponse> {
+  const url = new URL("/basket/optimize", API_BASE);
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`API ${res.status}: ${text || res.statusText}`);
+  }
+  return res.json() as Promise<BasketOptimizeResponse>;
 }
 
 export interface OrderPayload {

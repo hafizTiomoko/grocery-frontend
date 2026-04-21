@@ -142,6 +142,9 @@ export function BasketDrawer() {
             <div className="mt-3 grid grid-cols-3 gap-2">
               {(["tesco", "asda", "sainsburys"] as Retailer[]).map((r) => {
                 const isCheapest = cheapest === r && items.length > 0;
+                const bd = comparison?.breakdown.find((b) => b.retailer === r);
+                const meetsFree = bd?.meets_free_delivery ?? false;
+                const amountLeft = bd?.amount_to_free_delivery ?? 0;
                 return (
                   <div
                     key={r}
@@ -157,6 +160,13 @@ export function BasketDrawer() {
                     </div>
                     {isCheapest && (
                       <div className="mt-0.5 text-[10px] font-semibold uppercase text-emerald-600">Cheapest</div>
+                    )}
+                    {items.length > 0 && totals[r] > 0 && (
+                      meetsFree ? (
+                        <div className="mt-1 text-[10px] font-medium text-emerald-600">Free delivery</div>
+                      ) : amountLeft > 0 ? (
+                        <div className="mt-1 text-[10px] text-slate-400">£{amountLeft.toFixed(2)} to free</div>
+                      ) : null
                     )}
                   </div>
                 );

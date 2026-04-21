@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { KeepAlive } from "@/components/KeepAlive";
 
 export const metadata: Metadata = {
   title: "OneBasqet",
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen font-sans antialiased">
         {children}
         <ServiceWorkerRegister />
+        <KeepAlive />
       </body>
     </html>
   );

@@ -3,13 +3,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useBasket } from "@/store/useBasket";
 import { CheckoutModal } from "./CheckoutModal";
-import type { BasketBreakdown, Retailer } from "@/lib/api";
-
-const RETAILER_NAMES: Record<Retailer, string> = {
-  tesco: "Tesco",
-  asda: "Asda",
-  sainsburys: "Sainsbury's",
-};
+import { RETAILER_LABEL, type BasketBreakdown, type Retailer } from "@/lib/api";
 
 function optimizerMessage(
   items: { id: number; retailer: Retailer }[],
@@ -32,7 +26,7 @@ function optimizerMessage(
   const saving = expensive.total - cheapestBreakdown.total;
   if (saving <= 0) return null;
 
-  return `Switch ${switchable} item${switchable === 1 ? "" : "s"} to ${RETAILER_NAMES[cheapest]} to save £${saving.toFixed(2)}`;
+  return `Switch ${switchable} item${switchable === 1 ? "" : "s"} to ${RETAILER_LABEL[cheapest]} to save £${saving.toFixed(2)}`;
 }
 
 type DrawerState = "collapsed" | "peek" | "expanded";
@@ -70,11 +64,10 @@ export function BasketDrawer() {
   }, []);
 
   const handleToggle = useCallback(() => {
-    setDrawer((s) => {
-      if (s === "collapsed") return "peek";
-      if (s === "peek") return "expanded";
-      return "peek";
-    });
+    // Tap minimizes if the drawer is showing (peek/expanded), reopens to peek
+    // if it's collapsed. Swipe gestures still handle the finer peek<->expanded
+    // distinction via onTouchEnd below.
+    setDrawer((s) => (s === "collapsed" ? "peek" : "collapsed"));
   }, []);
 
   const message = useMemo(
@@ -82,12 +75,11 @@ export function BasketDrawer() {
     [items, comparison],
   );
 
-  const totals: Record<Retailer, number> = { tesco: 0, asda: 0, sainsburys: 0 };
-  comparison?.breakdown.forEach((b) => {
-    totals[b.retailer] = b.total;
-  });
-
   const cheapest = comparison?.cheapest_retailer ?? null;
+
+  // Whichever retailers are actually represented in the basket, cheapest
+  // first — not a fixed 3, so this scales to however many we track.
+  const breakdown = [...(comparison?.breakdown ?? [])].sort((a, b) => a.total - b.total);
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-30">
@@ -110,7 +102,7 @@ export function BasketDrawer() {
               </span>
               {cheapest && (
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  £{totals[cheapest]?.toFixed(2)}
+                  £{breakdown.find((b) => b.retailer === cheapest)?.total.toFixed(2)}
                 </span>
               )}
             </div>
@@ -139,33 +131,31 @@ export function BasketDrawer() {
               )}
             </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {(["tesco", "asda", "sainsburys"] as Retailer[]).map((r) => {
+            <div className="mt-3 flex flex-wrap gap-2">
+              {breakdown.map((bd) => {
+                const r = bd.retailer;
                 const isCheapest = cheapest === r && items.length > 0;
-                const bd = comparison?.breakdown.find((b) => b.retailer === r);
-                const meetsFree = bd?.meets_free_delivery ?? false;
-                const amountLeft = bd?.amount_to_free_delivery ?? 0;
                 return (
                   <div
                     key={r}
-                    className={`rounded-xl border p-3 text-center transition ${
+                    className={`flex-1 basis-[30%] rounded-xl border p-3 text-center transition ${
                       isCheapest
                         ? "border-emerald-500 bg-emerald-50"
                         : "border-slate-100 bg-slate-50"
                     }`}
                   >
-                    <div className="text-xs font-medium text-slate-600">{RETAILER_NAMES[r]}</div>
+                    <div className="text-xs font-medium text-slate-600">{RETAILER_LABEL[r]}</div>
                     <div className={`mt-1 text-base font-bold tracking-tight ${isCheapest ? "text-emerald-700" : "text-slate-900"}`}>
-                      £{totals[r].toFixed(2)}
+                      £{bd.total.toFixed(2)}
                     </div>
                     {isCheapest && (
                       <div className="mt-0.5 text-[10px] font-semibold uppercase text-emerald-600">Cheapest</div>
                     )}
-                    {items.length > 0 && totals[r] > 0 && (
-                      meetsFree ? (
+                    {items.length > 0 && bd.total > 0 && (
+                      bd.meets_free_delivery ? (
                         <div className="mt-1 text-[10px] font-medium text-emerald-600">Free delivery</div>
-                      ) : amountLeft > 0 ? (
-                        <div className="mt-1 text-[10px] text-slate-400">£{amountLeft.toFixed(2)} to free</div>
+                      ) : bd.amount_to_free_delivery > 0 ? (
+                        <div className="mt-1 text-[10px] text-slate-400">£{bd.amount_to_free_delivery.toFixed(2)} to free</div>
                       ) : null
                     )}
                   </div>

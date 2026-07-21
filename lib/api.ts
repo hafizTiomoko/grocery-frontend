@@ -1,4 +1,23 @@
-export type Retailer = "tesco" | "sainsburys" | "asda";
+export type Retailer =
+  | "tesco"
+  | "sainsburys"
+  | "asda"
+  | "morrisons"
+  | "waitrose"
+  | "ocado"
+  | "iceland";
+
+// Single source of truth for display names — previously duplicated (and
+// hardcoded to just tesco/asda/sainsburys) across several components.
+export const RETAILER_LABEL: Record<Retailer, string> = {
+  tesco: "Tesco",
+  asda: "Asda",
+  sainsburys: "Sainsbury's",
+  morrisons: "Morrisons",
+  waitrose: "Waitrose",
+  ocado: "Ocado",
+  iceland: "Iceland",
+};
 
 export interface Product {
   id: number;

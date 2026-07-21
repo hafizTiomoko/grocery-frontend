@@ -1,14 +1,8 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { useBasket } from "@/store/useBasket";
-import { submitOrder, type Retailer } from "@/lib/api";
+import { submitOrder, RETAILER_LABEL, type Retailer } from "@/lib/api";
 import { Toast, type ToastTone } from "./Toast";
-
-const RETAILER_LABEL: Record<Retailer, string> = {
-  tesco: "Tesco",
-  asda: "Asda",
-  sainsburys: "Sainsbury's",
-};
 
 const DELIVERY_TIMES = [
   { value: "today_morning", label: "Today — Morning (8am–12pm)" },

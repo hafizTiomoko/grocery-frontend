@@ -2,37 +2,139 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useBasket } from "@/store/useBasket";
-import { searchProducts, type Product, type Retailer } from "@/lib/api";
+import { searchProducts, RETAILER_LABEL, type Product, type Retailer } from "@/lib/api";
 
-const RETAILERS: Retailer[] = ["tesco", "asda", "sainsburys"];
-const RETAILER_LABEL: Record<Retailer, string> = {
-  tesco: "Tesco",
-  asda: "Asda",
-  sainsburys: "Sainsbury's",
+// Stable display order for whichever retailers actually turn up in a given
+// basket's search results — not a fixed 3, so this scales to however many
+// retailers we track without hardcoding.
+const RETAILER_ORDER: Retailer[] = ["tesco", "asda", "sainsburys", "morrisons", "waitrose", "ocado", "iceland"];
+
+type UnitDimension = "weight" | "volume";
+type UnitRate = { ratePerBase: number; dimension: UnitDimension };
+
+type SmartSwitchOption = {
+  candidate: Product;
+  packs: number;
+  totalCost: number;
+  totalQuantity: number; // in base unit (kg for weight, litre for volume)
+  dimension: UnitDimension;
+  savings: number;
+  percent: number;
+};
+
+type SmartSwitch = {
+  // Either a single clean-multiple option, or a less/more pair when pack
+  // counts don't divide evenly into the original quantity.
+  exact?: SmartSwitchOption;
+  less?: SmartSwitchOption;
+  more?: SmartSwitchOption;
 };
 
 type Row = {
   basketItem: Product;
   matches: Partial<Record<Retailer, Product>>;
-  smartSwitch?: { candidate: Product; savings: number; percent: number };
+  smartSwitch?: SmartSwitch;
 };
 
-const SWITCH_THRESHOLD = 0.2; // 20% cheaper
+const SWITCH_THRESHOLD = 0.2; // 20% cheaper, applied to the unit rate (not sticker price)
 
-function findSmartSwitch(
-  target: Product,
-  candidates: Product[],
-): Row["smartSwitch"] {
+function parseUnitPrice(unitPrice: string | null | undefined): UnitRate | null {
+  if (!unitPrice) return null;
+  const m = unitPrice.match(/^([\d.]+)\/(kg|g|100g|litre|ml|100ml)$/i);
+  if (!m) return null;
+  const value = parseFloat(m[1]);
+  switch (m[2].toLowerCase()) {
+    case "kg": return { ratePerBase: value, dimension: "weight" };
+    case "g": return { ratePerBase: value * 1000, dimension: "weight" };
+    case "100g": return { ratePerBase: value * 10, dimension: "weight" };
+    case "litre": return { ratePerBase: value, dimension: "volume" };
+    case "ml": return { ratePerBase: value * 1000, dimension: "volume" };
+    case "100ml": return { ratePerBase: value * 10, dimension: "volume" };
+    default: return null;
+  }
+}
+
+function formatQuantity(valueInBaseUnit: number, dimension: UnitDimension): string {
+  if (dimension === "weight") {
+    return valueInBaseUnit < 1
+      ? `${Math.round(valueInBaseUnit * 1000)}g`
+      : `${parseFloat(valueInBaseUnit.toFixed(2))}kg`;
+  }
+  return valueInBaseUnit < 1
+    ? `${Math.round(valueInBaseUnit * 1000)}ml`
+    : `${parseFloat(valueInBaseUnit.toFixed(2))}L`;
+}
+
+/**
+ * Pack-size-aware comparison between the basket item and one candidate.
+ *
+ * Sticker price alone is misleading when pack sizes differ (a 320g pack at
+ * half the price of a 640g pack isn't a saving, it's the same unit price) —
+ * so this compares unit rates first, then works out how many packs of the
+ * candidate are actually needed to match or exceed the original quantity.
+ * Returns null rather than guessing if either side has no parseable
+ * unit_price, or they're not in the same dimension (weight vs volume).
+ */
+function evaluateSwitch(target: Product, candidate: Product): SmartSwitchOption[] | null {
   const targetPrice = target.effective_price;
-  if (!targetPrice) return undefined;
-  const cheaper = candidates
+  if (!targetPrice || candidate.effective_price <= 0) return null;
+
+  const targetRate = parseUnitPrice(target.unit_price);
+  const candidateRate = parseUnitPrice(candidate.unit_price);
+  if (!targetRate || !candidateRate || targetRate.dimension !== candidateRate.dimension) {
+    return null;
+  }
+  if (candidateRate.ratePerBase > targetRate.ratePerBase * (1 - SWITCH_THRESHOLD)) {
+    return null; // not meaningfully cheaper per unit
+  }
+
+  const targetPackSize = target.price / targetRate.ratePerBase;
+  const candidatePackSize = candidate.price / candidateRate.ratePerBase;
+  if (!targetPackSize || !candidatePackSize) return null;
+
+  const ratio = targetPackSize / candidatePackSize;
+  const packsFloor = Math.max(1, Math.floor(ratio));
+  const packsCeil = Math.max(1, Math.ceil(ratio));
+
+  const makeOption = (packs: number): SmartSwitchOption | null => {
+    const totalCost = candidate.effective_price * packs;
+    const savings = targetPrice - totalCost;
+    if (savings <= 0) return null;
+    return {
+      candidate,
+      packs,
+      totalCost,
+      totalQuantity: candidatePackSize * packs,
+      dimension: candidateRate.dimension,
+      savings,
+      percent: (savings / targetPrice) * 100,
+    };
+  };
+
+  if (packsFloor === packsCeil) {
+    const opt = makeOption(packsFloor);
+    return opt ? [opt] : null;
+  }
+  const options = [makeOption(packsFloor), makeOption(packsCeil)].filter(
+    (o): o is SmartSwitchOption => o !== null,
+  );
+  return options.length > 0 ? options : null;
+}
+
+function findSmartSwitch(target: Product, candidates: Product[]): SmartSwitch | undefined {
+  const evaluated = candidates
     .filter((c) => c.id !== target.id && c.effective_price > 0)
-    .filter((c) => (targetPrice - c.effective_price) / targetPrice >= SWITCH_THRESHOLD)
-    .sort((a, b) => a.effective_price - b.effective_price);
-  const best = cheaper[0];
-  if (!best) return undefined;
-  const savings = targetPrice - best.effective_price;
-  return { candidate: best, savings, percent: (savings / targetPrice) * 100 };
+    .map((c) => evaluateSwitch(target, c))
+    .filter((o): o is SmartSwitchOption[] => o !== null);
+
+  if (evaluated.length === 0) return undefined;
+
+  // Pick the candidate with the best single-pack (or best-option) savings.
+  evaluated.sort((a, b) => Math.max(...b.map((o) => o.savings)) - Math.max(...a.map((o) => o.savings)));
+  const best = evaluated[0];
+
+  if (best.length === 1) return { exact: best[0] };
+  return { less: best[0], more: best[1] };
 }
 
 function pickMatch(candidates: Product[], retailer: Retailer, target: Product): Product | undefined {
@@ -66,7 +168,8 @@ export default function ComparisonPage() {
         try {
           const res = await searchProducts(item.name, { limit: 10 });
           const matches: Partial<Record<Retailer, Product>> = {};
-          for (const r of RETAILERS) {
+          const retailersFound = new Set<Retailer>(res.results.map((r) => r.retailer));
+          for (const r of retailersFound) {
             const m = pickMatch(res.results, r, item);
             if (m) matches[r] = m;
           }
@@ -89,25 +192,30 @@ export default function ComparisonPage() {
     };
   }, [items]);
 
-  const totals: Record<Retailer, { total: number; complete: boolean }> = {
-    tesco: { total: 0, complete: true },
-    asda: { total: 0, complete: true },
-    sainsburys: { total: 0, complete: true },
-  };
+  // Only the retailers that actually turned up across this basket's search
+  // results get a column — could be 1, could be all 7, no hardcoded set.
+  const tableRetailers = RETAILER_ORDER.filter((r) => rows.some((row) => row.matches[r]));
+
+  const totals: Partial<Record<Retailer, { total: number; complete: boolean }>> = {};
+  for (const r of tableRetailers) {
+    totals[r] = { total: 0, complete: true };
+  }
   for (const row of rows) {
-    for (const r of RETAILERS) {
+    for (const r of tableRetailers) {
       const m = row.matches[r];
-      if (m) totals[r].total += m.effective_price;
-      else totals[r].complete = false;
+      if (m) totals[r]!.total += m.effective_price;
+      else totals[r]!.complete = false;
     }
   }
 
-  const ranked = RETAILERS
-    .filter((r) => totals[r].complete && rows.length > 0)
-    .sort((a, b) => totals[a].total - totals[b].total);
+  const ranked = tableRetailers
+    .filter((r) => totals[r]!.complete && rows.length > 0)
+    .sort((a, b) => totals[a]!.total - totals[b]!.total);
   const winner = ranked[0];
   const savings =
-    winner && ranked.length > 1 ? totals[ranked[ranked.length - 1]].total - totals[winner].total : 0;
+    winner && ranked.length > 1
+      ? totals[ranked[ranked.length - 1]]!.total - totals[winner]!.total
+      : 0;
 
   return (
     <div className="min-h-screen pb-24">
@@ -144,7 +252,7 @@ export default function ComparisonPage() {
                 Total Savings: £{savings.toFixed(2)} by shopping at {RETAILER_LABEL[winner].toUpperCase()}
               </h1>
               <p className="mt-1 text-sm text-emerald-50">
-                {RETAILER_LABEL[winner]} total: £{totals[winner].total.toFixed(2)}
+                {RETAILER_LABEL[winner]} total: £{totals[winner]!.total.toFixed(2)}
               </p>
             </div>
           ) : (
@@ -162,34 +270,56 @@ export default function ComparisonPage() {
             {rows
               .filter((r): r is Row & { smartSwitch: NonNullable<Row["smartSwitch"]> } => !!r.smartSwitch)
               .map((row) => {
-                const { candidate, savings } = row.smartSwitch;
-                const retailerLabel = RETAILER_LABEL[candidate.retailer];
+                const { exact, less, more } = row.smartSwitch;
+                const options: Array<SmartSwitchOption & { note?: string }> = exact
+                  ? [exact]
+                  : [
+                      ...(less ? [{ ...less, note: "closest under" }] : []),
+                      ...(more ? [{ ...more, note: "closest over" }] : []),
+                    ];
+                if (options.length === 0) return null;
+                const retailerLabel = RETAILER_LABEL[options[0].candidate.retailer];
                 return (
                   <div
                     key={`tip-${row.basketItem.id}`}
-                    className="flex items-start gap-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900"
+                    className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900"
                   >
-                    <span aria-hidden className="text-lg leading-none">💡</span>
-                    <div className="flex-1">
-                      <p>
-                        <span className="font-semibold">Smart Switch:</span> You can save an extra{" "}
-                        <span className="font-semibold">£{savings.toFixed(2)}</span> by switching{" "}
-                        <span className="font-medium">“{row.basketItem.name}”</span> to{" "}
-                        <span className="font-medium">
-                          “{candidate.name}”
-                        </span>{" "}
-                        <span className="text-sky-700">({retailerLabel})</span>.
+                    <div className="flex items-start gap-3">
+                      <span aria-hidden className="text-lg leading-none">💡</span>
+                      <p className="flex-1">
+                        <span className="font-semibold">Smart Switch:</span> cheaper alternative for{" "}
+                        <span className="font-medium">“{row.basketItem.name}”</span> at{" "}
+                        <span className="text-sky-700">{retailerLabel}</span>
+                        {options.length > 1 && " — pack sizes don't divide evenly, pick one:"}
                       </p>
                     </div>
-                    <button
-                      onClick={() => {
-                        remove(row.basketItem.id);
-                        add(candidate);
-                      }}
-                      className="shrink-0 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-700"
-                    >
-                      Switch
-                    </button>
+                    <div className="mt-2 space-y-1.5">
+                      {options.map((opt) => (
+                        <div
+                          key={opt.packs}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"
+                        >
+                          <span>
+                            {opt.packs > 1 ? `${opt.packs}× ` : ""}
+                            <span className="font-medium">“{opt.candidate.name}”</span>{" "}
+                            <span className="text-sky-700">
+                              ({formatQuantity(opt.totalQuantity, opt.dimension)} total
+                              {opt.note ? `, ${opt.note}` : ""})
+                            </span>{" "}
+                            — save <span className="font-semibold">£{opt.savings.toFixed(2)}</span>
+                          </span>
+                          <button
+                            onClick={() => {
+                              remove(row.basketItem.id);
+                              for (let i = 0; i < opt.packs; i++) add(opt.candidate);
+                            }}
+                            className="shrink-0 rounded-full bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-700"
+                          >
+                            Switch
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
@@ -202,20 +332,20 @@ export default function ComparisonPage() {
               <thead>
                 <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
                   <th className="px-4 py-3 font-medium">Product</th>
-                  {RETAILERS.map((r) => (
+                  {tableRetailers.map((r) => (
                     <th key={r} className="px-4 py-3 font-medium">{RETAILER_LABEL[r]}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => {
-                  const prices = RETAILERS.map((r) => row.matches[r]?.effective_price ?? null);
+                  const prices = tableRetailers.map((r) => row.matches[r]?.effective_price ?? null);
                   const validPrices = prices.filter((p): p is number => p !== null);
                   const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : null;
                   return (
                     <tr key={row.basketItem.id} className="border-b border-slate-50 last:border-0">
                       <td className="px-4 py-3 align-top">
-                        <div className="font-medium text-slate-900 line-clamp-2">
+                        <div className="font-medium text-slate-900 line-clamp-2" title={row.basketItem.name}>
                           {row.basketItem.name}
                         </div>
                         {row.basketItem.unit_price && (
@@ -224,7 +354,7 @@ export default function ComparisonPage() {
                           </div>
                         )}
                       </td>
-                      {RETAILERS.map((r, i) => {
+                      {tableRetailers.map((r, i) => {
                         const match = row.matches[r];
                         const price = prices[i];
                         const isCheapest = price !== null && minPrice !== null && price === minPrice;
@@ -258,8 +388,8 @@ export default function ComparisonPage() {
                 })}
                 <tr className="bg-slate-50 text-sm">
                   <td className="px-4 py-3 font-semibold text-slate-700">Basket total</td>
-                  {RETAILERS.map((r) => {
-                    const t = totals[r];
+                  {tableRetailers.map((r) => {
+                    const t = totals[r]!;
                     const isWinner = winner === r;
                     return (
                       <td

@@ -6,11 +6,13 @@ export function Header({
   onChange,
   loading,
   onScanClick,
+  onFilterClick,
 }: {
   value: string;
   onChange: (q: string) => void;
   loading?: boolean;
   onScanClick?: () => void;
+  onFilterClick?: () => void;
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/90 backdrop-blur">
@@ -63,6 +65,19 @@ export function Header({
             </div>
           </div>
         </div>
+        {onFilterClick && (
+          <button
+            type="button"
+            onClick={onFilterClick}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            aria-label="Filter retailers"
+            title="Filter retailers"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="4 4 20 4 14 12.5 14 19 10 21 10 12.5 4 4" />
+            </svg>
+          </button>
+        )}
         <AuthButton />
       </div>
     </header>

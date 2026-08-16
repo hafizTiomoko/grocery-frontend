@@ -3,11 +3,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useBasket } from "@/store/useBasket";
 import { searchProducts, RETAILER_LABEL, type Product, type Retailer } from "@/lib/api";
+import { useRetailerFilter } from "@/store/useRetailerFilter";
 
 // Stable display order for whichever retailers actually turn up in a given
 // basket's search results — not a fixed 3, so this scales to however many
 // retailers we track without hardcoding.
-const RETAILER_ORDER: Retailer[] = ["tesco", "asda", "sainsburys", "morrisons", "waitrose", "ocado", "iceland"];
+const RETAILER_ORDER: Retailer[] = [
+  "tesco", "asda", "sainsburys", "morrisons", "waitrose", "ocado", "iceland",
+  "aldi", "lidl", "tariqhalalmeats", "orientalmart",
+];
 
 type UnitDimension = "weight" | "volume";
 type UnitRate = { ratePerBase: number; dimension: UnitDimension };
@@ -156,6 +160,8 @@ export default function ComparisonPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const enabledRetailers = useRetailerFilter((s) => s.enabled);
+
   useEffect(() => {
     if (items.length === 0) {
       setRows([]);
@@ -163,19 +169,25 @@ export default function ComparisonPage() {
     }
     let cancelled = false;
     setLoading(true);
+    const enabledSet = new Set(enabledRetailers);
     Promise.all(
       items.map(async (item): Promise<Row> => {
         try {
           const res = await searchProducts(item.name, { limit: 10 });
+          // Hidden retailers never appear as *candidates* for other rows or
+          // Smart Switch suggestions — but the user's own basket item is
+          // force-set below regardless, so something they already added
+          // from a hidden retailer still gets its own column.
+          const candidates = res.results.filter((r) => enabledSet.has(r.retailer));
           const matches: Partial<Record<Retailer, Product>> = {};
-          const retailersFound = new Set<Retailer>(res.results.map((r) => r.retailer));
+          const retailersFound = new Set<Retailer>(candidates.map((r) => r.retailer));
           for (const r of retailersFound) {
-            const m = pickMatch(res.results, r, item);
+            const m = pickMatch(candidates, r, item);
             if (m) matches[r] = m;
           }
           // Always keep the user's own pick for its retailer.
           matches[item.retailer] = item;
-          const smartSwitch = findSmartSwitch(item, res.results);
+          const smartSwitch = findSmartSwitch(item, candidates);
           return { basketItem: item, matches, smartSwitch };
         } catch {
           return { basketItem: item, matches: { [item.retailer]: item } };
@@ -190,7 +202,7 @@ export default function ComparisonPage() {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+  }, [items, enabledRetailers]);
 
   // Only the retailers that actually turned up across this basket's search
   // results get a column — could be 1, could be all 7, no hardcoded set.

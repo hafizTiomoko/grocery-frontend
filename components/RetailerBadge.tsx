@@ -8,6 +8,10 @@ const RETAILER_META: Record<Retailer, { label: string; bg: string; fg: string }>
   waitrose: { label: "Waitrose", bg: "bg-teal-50", fg: "text-teal-700" },
   ocado: { label: "Ocado", bg: "bg-pink-50", fg: "text-pink-700" },
   iceland: { label: "Iceland", bg: "bg-red-50", fg: "text-red-700" },
+  aldi: { label: "Aldi", bg: "bg-sky-50", fg: "text-sky-700" },
+  lidl: { label: "Lidl", bg: "bg-yellow-50", fg: "text-yellow-800" },
+  tariqhalalmeats: { label: "Tariq Halal Meats", bg: "bg-lime-50", fg: "text-lime-700" },
+  orientalmart: { label: "Oriental Mart", bg: "bg-fuchsia-50", fg: "text-fuchsia-700" },
 };
 
 export function RetailerBadge({ retailer }: { retailer: Retailer }) {

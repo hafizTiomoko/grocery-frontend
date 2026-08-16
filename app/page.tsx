@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
 import { ComparisonGroupCard } from "@/components/ComparisonGroupCard";
@@ -8,9 +8,40 @@ import { BasketDrawer } from "@/components/BasketDrawer";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { RefreshButton } from "@/components/RefreshButton";
 import { LiveScrapeBanner } from "@/components/LiveScrapeBanner";
+import { RetailerFilterPanel } from "@/components/RetailerFilterPanel";
 import { Toast, type ToastTone } from "@/components/Toast";
 import { searchGrouped, searchProducts, type ComparisonGroup } from "@/lib/api";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useRetailerFilter } from "@/store/useRetailerFilter";
+
+/**
+ * Trims each group's retailer options down to the enabled set, recomputing
+ * cheapest_retailer/price/retailer_count from what's left, and drops any
+ * group that has zero options remaining — a product only available at a
+ * hidden retailer shouldn't produce an empty card.
+ */
+function applyRetailerFilter(groups: ComparisonGroup[], enabled: Set<string>): ComparisonGroup[] {
+  const filtered: ComparisonGroup[] = [];
+  for (const g of groups) {
+    const options = Object.fromEntries(
+      Object.entries(g.options).filter(([retailer]) => enabled.has(retailer)),
+    ) as ComparisonGroup["options"];
+
+    const entries = Object.entries(options);
+    if (entries.length === 0) continue;
+
+    const cheapest = entries.reduce((a, b) => (b[1]!.effective_price < a[1]!.effective_price ? b : a));
+
+    filtered.push({
+      ...g,
+      options,
+      cheapest_retailer: cheapest[0] as ComparisonGroup["cheapest_retailer"],
+      cheapest_price: cheapest[1]!.effective_price,
+      retailer_count: entries.length,
+    });
+  }
+  return filtered;
+}
 
 type ToastState = { message: string; tone: ToastTone } | null;
 
@@ -47,7 +78,12 @@ export default function HomePage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [noCacheHint, setNoCacheHint] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+
+  const enabledRetailers = useRetailerFilter((s) => s.enabled);
+  const enabledSet = useMemo(() => new Set(enabledRetailers), [enabledRetailers]);
+  const filteredGroups = useMemo(() => applyRetailerFilter(groups, enabledSet), [groups, enabledSet]);
 
   const requestIdRef = useRef(0);
 
@@ -112,12 +148,23 @@ export default function HomePage() {
 
   const showEmptyState = !query.trim() && !loading && !refreshing;
   const showNoResults =
-    hasSearched && !loading && !refreshing && !error && groups.length === 0 && !!query.trim();
+    hasSearched && !loading && !refreshing && !error && filteredGroups.length === 0 && !!query.trim();
+  // Distinguish "genuinely nothing scraped for this query" (noCacheHint,
+  // where re-scraping helps) from "results exist but the retailer filter
+  // hid all of them" (where re-scraping does nothing — the fix is to
+  // adjust the filter, not fetch more data).
+  const hiddenByFilter = showNoResults && groups.length > 0;
   const backendDown = isBackendDown(error);
 
   return (
     <div className="min-h-screen pb-64">
-      <Header value={query} onChange={setQuery} loading={loading} onScanClick={() => setScannerOpen(true)} />
+      <Header
+        value={query}
+        onChange={setQuery}
+        loading={loading}
+        onScanClick={() => setScannerOpen(true)}
+        onFilterClick={() => setFilterOpen(true)}
+      />
 
       <main className="mx-auto max-w-2xl px-4 py-4">
         {/* ── Maintenance banner ── */}
@@ -189,8 +236,8 @@ export default function HomePage() {
           <div className="mb-3 flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
               {query ? `Results for "${query}"` : "Results"}
-              {!loading && groups.length > 0 && (
-                <span className="ml-1 text-slate-400">· {groups.length} group{groups.length !== 1 ? "s" : ""}</span>
+              {!loading && filteredGroups.length > 0 && (
+                <span className="ml-1 text-slate-400">· {filteredGroups.length} group{filteredGroups.length !== 1 ? "s" : ""}</span>
               )}
             </p>
             <RefreshButton
@@ -232,7 +279,19 @@ export default function HomePage() {
           >
             <div className="text-3xl">🔎</div>
             <p className="mt-2 text-sm font-medium text-slate-700">No products found</p>
-            {noCacheHint ? (
+            {hiddenByFilter ? (
+              <div className="mt-3">
+                <p className="text-xs text-slate-500">
+                  We found results, but they're all from retailers you've hidden.
+                </p>
+                <button
+                  onClick={() => setFilterOpen(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600"
+                >
+                  Adjust filter
+                </button>
+              </div>
+            ) : noCacheHint ? (
               <div className="mt-3">
                 <p className="text-xs text-slate-500">
                   This item isn't in our cache yet.
@@ -252,10 +311,10 @@ export default function HomePage() {
         )}
 
         {/* ── Grouped results with staggered fade-in ── */}
-        {!loading && groups.length > 0 && (
+        {!loading && filteredGroups.length > 0 && (
           <ul className="mt-2 space-y-4">
             <AnimatePresence mode="popLayout">
-              {groups.map((g, i) => (
+              {filteredGroups.map((g, i) => (
                 <motion.li
                   key={`${g.display_name}-${i}`}
                   initial={{ opacity: 0, y: 16 }}
@@ -275,6 +334,10 @@ export default function HomePage() {
 
       {scannerOpen && (
         <BarcodeScanner onClose={() => setScannerOpen(false)} />
+      )}
+
+      {filterOpen && (
+        <RetailerFilterPanel onClose={() => setFilterOpen(false)} />
       )}
 
       {toast && (

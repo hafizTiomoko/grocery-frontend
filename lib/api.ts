@@ -5,7 +5,11 @@ export type Retailer =
   | "morrisons"
   | "waitrose"
   | "ocado"
-  | "iceland";
+  | "iceland"
+  | "aldi"
+  | "lidl"
+  | "tariqhalalmeats"
+  | "orientalmart";
 
 // Single source of truth for display names — previously duplicated (and
 // hardcoded to just tesco/asda/sainsburys) across several components.
@@ -17,6 +21,10 @@ export const RETAILER_LABEL: Record<Retailer, string> = {
   waitrose: "Waitrose",
   ocado: "Ocado",
   iceland: "Iceland",
+  aldi: "Aldi",
+  lidl: "Lidl",
+  tariqhalalmeats: "Tariq Halal Meats",
+  orientalmart: "Oriental Mart",
 };
 
 export interface Product {

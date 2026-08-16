@@ -1,4 +1,4 @@
-const CACHE_NAME = "onebasqet-1786893768785";
+const CACHE_NAME = "onebasqet-1786895089872";
 const APP_SHELL = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

@@ -3,5 +3,5 @@
 @tailwind utilities;
 
 :root { --bg: #fafafa; }
-html, body { background: var(--bg); color: #0f172a; }
+html, body { background: var(--bg); color: #0f172a; overflow-x: hidden; max-width: 100vw; }
 body { font-feature-settings: "cv02","cv03","cv04","cv11"; }
